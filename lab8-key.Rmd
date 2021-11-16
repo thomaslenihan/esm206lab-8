@@ -1,0 +1,155 @@
+---
+title: "lab8-notes"
+author: "Thomas Lenihan"
+date: "11/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(modelsummary)
+library(corrplot)
+library(broom)
+library(here)
+library(ggthemes)
+
+```
+
+###Read in slo_homes.csv
+
+```{r}
+homes <- read_csv(here("data", "slo_homes.csv"))
+```
+
+
+###Create a subset with 4 cities
+
+Task: create a subset (called homes_subset) that only contians observations where the city is: 
+
+- "San Luis Obispo"
+- "Atascadero""
+- "Arroyo Grande" 
+- "Santa Maria-Orcutt"
+
+```{r}
+homes_subset <- homes %>% #create a subset of the cities below
+  filter(City %in% c("San Luis Obispo", 
+                     "Atascadero", 
+                     "Arroyo Grande", 
+                     "Santa Maria-Orcutt"))
+#unique(homes_subset$City) #then check it worked with unique() 
+```
+
+### A little exploration
+
+Task: create a summary table that has the mean and standard deviation of home prices grouped by city and sale status
+
+**to avoid running code (like if it's computationally intensive), use eval = FALSE in the header of the code chunk in question**
+```{r, eval = FALSE}
+
+```
+
+
+```{r, include=FALSE}
+subset_table1 <- homes_subset %>% 
+  group_by(City, Status) %>% 
+  summarize(mean_price = mean(Price),
+            sd_price = sd(Price),
+            mean_sqft = mean(SqFt))
+
+subset_table1
+```
+
+Task: explore the relationship between square footage and home price (from homes subset) in a scatterplot.
+
+```{r}
+ggplot(data = homes_subset,
+         aes(x = SqFt,
+         y = Price
+         )) +
+  geom_point(aes(color = City))+
+  geom_smooth(method = lm)+
+  theme_economist_white()
+
+```
+
+### Try a few linear models
+
+Use multiple linear regression to investigate relationships between several predictor variables and home price.
+
+Task: Create two different permutations of this model:
+
+- price ~ City, Bedrooms, Bathrooms, SqFt, Status
+- price ~ City, SqFt, Status
+- Try another one
+
+```{r}
+lm1 <- lm(Price ~ City + Bedrooms + Bathrooms + SqFt + Status, data = homes_subset)
+lm2 <- lm(Price ~ City + SqFt + Status, data = homes_subset)
+lm3 <- lm(Price ~ City + Status + SqFt, data = homes_subset)
+
+lm1
+lm2
+lm3
+
+# If I wanted SLO to be the reference level:
+# Use fct_relevel to specift a new reference level
+
+new_homes_subset <- homes_subset %>% 
+  mutate(City = fct_relevel(City, "San Luis Obispo"))
+
+lm_slo <- lm(Price ~ City + Status + SqFt, data = new_homes_subset)
+
+summary(lm_slo)
+```
+
+### Explore correlations between quantitative variables
+
+Task: make a subset called homes_quant (starting from homes_subset) that only contains the variables from Price through SqFt. 
+
+```{r}
+homes_quant <- homes_subset %>% 
+  select(Price:SqFt)
+
+#linear correlation coefficient using Pearson's R
+
+homes_cor <- cor(homes_quant)
+
+corrplot(homes_cor)
+```
+
+### Compare AIC values
+
+The AIC is a quantitative metric for model "optimization" that balances complexity with model fit. The best models are the ones that fit the data as well as possible, as simply as possible. Recall: lower AIC value indicates a *more optimal* balance of fit & complexity, but is not *the* way we pick a model.
+
+```{r}
+AIC(lm1)
+AIC(lm2)
+
+```
+
+### Use modelsummary() (or stargazer())to return multiple model outputs 
+
+```{r}
+modelsummary(list(lm1, lm2, lm3))
+```
+
+### Check out diagnostic plots for lm1
+
+```{r}
+plot(lm1)
+
+```
+
+### use broom::augment() to return the predictions (from model lm1) for existing observations
+
+```{r}
+home_predictions <- augment(lm1)
+
+ggplot(data = home_predictions,
+       aes(x = .resid))+
+  geom_histogram(bins = 50)
+
+```
